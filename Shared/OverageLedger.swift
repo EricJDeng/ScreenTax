@@ -18,7 +18,7 @@ enum OverageLedger {
     private static let key = "overageEvents"
 
     static func all() -> [OverageEvent] {
-        guard let data = AppGroup.sharedDefaults.data(forKey: key),
+        guard let data = UserDefaults.standard.data(forKey: key),
               let events = try? JSONDecoder().decode([OverageEvent].self, from: data)
         else { return [] }
         return events
@@ -28,10 +28,14 @@ enum OverageLedger {
         var events = all()
         events.append(event)
         guard let data = try? JSONEncoder().encode(events) else { return }
-        AppGroup.sharedDefaults.set(data, forKey: key)
+        UserDefaults.standard.set(data, forKey: key)
     }
 
     static func totalCentsOwed() -> Int {
         all().reduce(0) { $0 + $1.centsOwed }
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

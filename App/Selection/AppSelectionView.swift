@@ -1,22 +1,27 @@
-import FamilyControls
 import SwiftUI
 
 struct AppSelectionView: View {
-    @Binding var selection: FamilyActivitySelection
-    @State private var isPickerPresented = false
+    @Binding var watchedAppIds: Set<String>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(summary).foregroundStyle(.secondary)
-            Button("Choose apps…") { isPickerPresented = true }
+        ForEach(MockAppCatalog.all) { app in
+            Toggle(isOn: binding(for: app)) {
+                Label {
+                    Text(app.name)
+                } icon: {
+                    Image(systemName: app.symbol).foregroundStyle(app.tint.color)
+                }
+            }
         }
-        .familyActivityPicker(isPresented: $isPickerPresented, selection: $selection)
     }
 
-    private var summary: String {
-        let count = selection.applicationTokens.count
-            + selection.categoryTokens.count
-            + selection.webDomainTokens.count
-        return count == 0 ? "None selected" : "\(count) item(s) selected"
+    private func binding(for app: MockApp) -> Binding<Bool> {
+        Binding(
+            get: { watchedAppIds.contains(app.id) },
+            set: { isOn in
+                if isOn { watchedAppIds.insert(app.id) }
+                else { watchedAppIds.remove(app.id) }
+            }
+        )
     }
 }

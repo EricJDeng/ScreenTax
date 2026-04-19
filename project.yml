@@ -24,8 +24,6 @@ targets:
     sources:
       - path: App
       - path: Shared
-    dependencies:
-      - target: ScreenTaxMonitor
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.screentax.ScreenTax
@@ -33,22 +31,5 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_CFBundleDisplayName: ScreenTax
-        CODE_SIGN_ENTITLEMENTS: App/App.entitlements
         SWIFT_EMIT_LOC_STRINGS: YES
         ENABLE_PREVIEWS: YES
-
-  ScreenTaxMonitor:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: Monitor
-        excludes:
-          - "Info.plist"
-      - path: Shared
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.screentax.ScreenTax.Monitor
-        CODE_SIGN_ENTITLEMENTS: Monitor/Monitor.entitlements
-        INFOPLIST_FILE: Monitor/Info.plist
-        GENERATE_INFOPLIST_FILE: NO
-        SWIFT_EMIT_LOC_STRINGS: YES
