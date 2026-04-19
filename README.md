@@ -41,30 +41,6 @@ Shared/
 project.yml              xcodegen spec — the xcodeproj is generated from this
 ```
 
-## Running it
-
-The demo build has **no dependency on Apple's Family Controls entitlement** — it runs on the simulator out of the box with a timer-based usage simulator (1 real second = 1 simulated minute) so you can see the whole flow without waiting an hour or needing a paid developer account.
-
-```bash
-# Generate the Xcode project
-xcodegen generate
-
-# Build for the simulator
-xcodebuild \
-  -project ScreenTax.xcodeproj \
-  -scheme ScreenTax \
-  -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -derivedDataPath build \
-  build
-
-# Install and launch (replace with your simulator's UDID)
-xcrun simctl install <UDID> build/Build/Products/Debug-iphonesimulator/ScreenTax.app
-xcrun simctl launch  <UDID> com.screentax.ScreenTax
-```
-
-Or just open `ScreenTax.xcodeproj` in Xcode and hit run.
-
 ## Architecture
 
 The iOS client is split into three concerns:
@@ -75,15 +51,3 @@ The iOS client is split into three concerns:
 
 The UI is SwiftUI only, built around a stack of cards: hero → settle → settings → watched apps → payout destination. `@Observable` stores feed the views; `.onChange` handlers persist back to `UserDefaults`.
 
-## Roadmap
-
-- **Real Screen Time integration.** Wire up `DeviceActivityMonitor` behind the Family Controls entitlement so overages are measured from real app usage, not a simulator.
-- **Backend + auth.** Stand up the authoritative ledger, group membership, and settle state server-side.
-- **Payments.** Integrate a payments provider for both peer-to-peer settlement and charitable donations, with receipts and an unsettled/settled history.
-- **Accountability groups.** Invites, shared rules, group leaderboards, streaks.
-- **Smarter limits.** Per-app caps, weekly budgets, time-of-day rules, grace periods.
-- **Insights.** Weekly digest showing where time and money went, with month-over-month trends.
-
-## Status
-
-Hackathon build. Demo mode works end-to-end; real Screen Time integration, backend, and payments are next.
