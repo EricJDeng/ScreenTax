@@ -6,10 +6,10 @@ struct AppSelectionView: View {
     var body: some View {
         ForEach(MockAppCatalog.all) { app in
             Toggle(isOn: binding(for: app)) {
-                Label {
+                HStack(spacing: 12) {
+                    AppIconView(app: app, size: 36)
                     Text(app.name)
-                } icon: {
-                    Image(systemName: app.symbol).foregroundStyle(app.tint.color)
+                        .font(.body)
                 }
             }
         }

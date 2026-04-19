@@ -6,21 +6,27 @@ struct HomeView: View {
     @State private var session: DemoSession?
     @State private var ledgerTotal: Int = OverageLedger.totalCentsOwed()
     @State private var showingAppPicker = false
+    @State private var showingSettleConfirmation = false
+    @State private var showingSettleSuccess = false
+    @State private var lastSettledCents = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    owedCard
-                    simulationCard
-                    limitCard
+                    heroCard
+                    if ledgerTotal > 0 {
+                        settleCard
+                    }
+                    settingsCard
                     appsCard
-                    payoutSummary
+                    payoutRow
                     if ledgerTotal > 0 {
                         clearLedgerButton
                     }
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("ScreenTax")
@@ -36,230 +42,454 @@ struct HomeView: View {
             payout = PayoutSettingsStore.load()
             ledgerTotal = OverageLedger.totalCentsOwed()
         }
-        .sheet(isPresented: $showingAppPicker) {
-            NavigationStack {
-                Form {
-                    Section {
-                        AppSelectionView(watchedAppIds: $settings.watchedAppIds)
-                    } footer: {
-                        Text("Only these apps count toward your daily limit.")
-                    }
-                }
-                .navigationTitle("Watched apps")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showingAppPicker = false }
-                    }
-                }
+        .sheet(isPresented: $showingAppPicker) { appPickerSheet }
+    }
+
+    // MARK: - Hero
+
+    private var heroCard: some View {
+        VStack(spacing: 18) {
+            if let session, session.isRunning {
+                runningHero(session)
+            } else {
+                idleHero
             }
-            .presentationDetents([.medium, .large])
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(heroBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(
+            color: session?.isRunning == true
+                ? Color.indigo.opacity(0.22)
+                : Color.black.opacity(0.04),
+            radius: 18, x: 0, y: 8
+        )
+        .animation(.snappy, value: session?.isRunning)
+        .animation(.snappy, value: session?.minutesOver ?? 0 > 0)
+    }
+
+    @ViewBuilder
+    private var heroBackground: some View {
+        if session?.isRunning == true {
+            LinearGradient(
+                colors: (session?.minutesOver ?? 0) > 0
+                    ? [Color.red, Color.orange]
+                    : [Color.indigo, Color.purple],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            Color(.secondarySystemGroupedBackground)
         }
     }
 
-    private var owedCard: some View {
-        VStack(spacing: 6) {
-            Text("Owed so far")
-                .font(.footnote.weight(.medium))
+    private var idleHero: some View {
+        VStack(spacing: 14) {
+            Text("OWED SO FAR")
+                .font(.caption.bold())
+                .tracking(1.6)
                 .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+
             Text(formatCents(ledgerTotal))
-                .font(.system(size: 56, weight: .bold, design: .rounded))
+                .font(.system(size: 60, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(ledgerTotal > 0 ? Color.red : Color.primary)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: ledgerTotal)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
-        .cardBackground()
-    }
 
-    private var simulationCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Tracking", systemImage: "timer")
-                    .font(.headline)
-                Spacer()
-                if session?.isRunning == true {
-                    liveBadge
-                }
-            }
-
-            if let session, session.isRunning {
-                runningControls(session)
-            } else {
-                idleControls
-            }
-        }
-        .padding()
-        .cardBackground()
-    }
-
-    private var liveBadge: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(Color.green)
-                .frame(width: 7, height: 7)
-                .modifier(PulseEffect())
-            Text("LIVE")
-                .font(.caption2.bold())
-                .foregroundStyle(.green)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(Capsule().fill(Color.green.opacity(0.12)))
-    }
-
-    private func runningControls(_ session: DemoSession) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ProgressView(
-                value: min(Double(session.simulatedMinutesUsed), Double(settings.dailyMinutes)),
-                total: Double(settings.dailyMinutes)
-            )
-            .tint(session.minutesOver > 0 ? .red : .accentColor)
-
-            HStack {
-                Text("\(session.simulatedMinutesUsed) / \(settings.dailyMinutes) min")
-                    .font(.caption.monospacedDigit())
+            if settings.watchedAppIds.isEmpty {
+                Text("Pick some apps below to get started")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                Spacer()
-                if session.minutesOver > 0 {
-                    Text("+\(session.minutesOver) over")
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.red)
-                }
+                    .padding(.top, 2)
             }
-
-            Button(role: .destructive) {
-                session.stop()
-                self.session = nil
-            } label: {
-                Label("Stop tracking", systemImage: "stop.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.bordered)
-            .tint(.red)
-        }
-    }
-
-    private var idleControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Each real second counts as one simulated minute of screen time.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
 
             Button {
                 startSession()
             } label: {
                 Label("Start tracking", systemImage: "play.fill")
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(.indigo)
             .disabled(settings.watchedAppIds.isEmpty)
+            .padding(.top, 6)
         }
     }
 
-    private var limitCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Limits", systemImage: "hourglass")
-                .font(.headline)
+    private func runningHero(_ session: DemoSession) -> some View {
+        let progress = min(Double(session.simulatedMinutesUsed) / Double(max(settings.dailyMinutes, 1)), 1.0)
+        let sessionCents = session.minutesOver * settings.centsPerMinuteOver
+        let isOver = session.minutesOver > 0
+        return VStack(spacing: 18) {
+            HStack {
+                liveBadge
+                Spacer()
+                Text(isOver ? "OVER LIMIT" : "TRACKING")
+                    .font(.caption2.bold())
+                    .tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
 
-            Stepper(value: $settings.dailyMinutes, in: 1...600, step: 5) {
-                HStack {
-                    Text("Daily limit")
-                    Spacer()
-                    Text("\(settings.dailyMinutes) min")
-                        .foregroundStyle(.secondary)
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.18), lineWidth: 12)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        Color.white,
+                        style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.25), value: progress)
+
+                VStack(spacing: 2) {
+                    Text(formatCents(sessionCents))
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                    Text(isOver
+                        ? "+\(session.minutesOver) min over"
+                        : "\(session.simulatedMinutesUsed) / \(settings.dailyMinutes) min")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
                         .monospacedDigit()
                 }
             }
-            Divider()
-            Stepper(value: $settings.centsPerMinuteOver, in: 1...500, step: 5) {
-                HStack {
-                    Text("Per extra minute")
-                    Spacer()
-                    Text(formatCents(settings.centsPerMinuteOver))
+            .frame(width: 220, height: 220)
+            .padding(.vertical, 4)
+
+            Button {
+                session.stop()
+                self.session = nil
+            } label: {
+                Label("Stop tracking", systemImage: "stop.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(.white.opacity(0.22))
+        }
+    }
+
+    private var liveBadge: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(Color.white)
+                .frame(width: 7, height: 7)
+                .modifier(PulseEffect())
+            Text("LIVE")
+                .font(.caption2.bold())
+                .tracking(1.2)
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.white.opacity(0.22)))
+    }
+
+    // MARK: - Settle
+
+    private var settleCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(settleHeadline)
+                        .font(.caption.bold())
+                        .tracking(1.4)
                         .foregroundStyle(.secondary)
+                    Text(formatCents(ledgerTotal))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .monospacedDigit()
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
                 }
+                Spacer()
+                Image(systemName: payout.mode == .friends ? "paperplane.fill" : "heart.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(settleTint.gradient)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                Text(settleDestination)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Spacer()
+            }
+
+            if payout.mode == .friends, !payout.friends.isEmpty {
+                Text("Each friend gets \(formatCents(perFriendCents))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                showingSettleConfirmation = true
+            } label: {
+                Label(
+                    settleButtonTitle,
+                    systemImage: payout.mode == .friends ? "paperplane.fill" : "heart.circle.fill"
+                )
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(settleTint)
+            .disabled(!canSettle)
+
+            if !canSettle {
+                Text(
+                    payout.mode == .friends
+                        ? "Add someone in Accountability to pay."
+                        : "Pick a charity in Accountability to donate."
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
             }
         }
-        .padding()
+        .padding(18)
+        .cardBackground()
+        .confirmationDialog(
+            "Settle \(formatCents(ledgerTotal))?",
+            isPresented: $showingSettleConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(settleButtonTitle) { settlePayment() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(settleConfirmationMessage)
+        }
+        .alert(settleSuccessTitle, isPresented: $showingSettleSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(settleSuccessMessage)
+        }
+    }
+
+    private var settleHeadline: String {
+        payout.mode == .friends ? "TIME TO PAY UP" : "TIME TO GIVE BACK"
+    }
+
+    private var settleTint: Color {
+        payout.mode == .friends ? .indigo : .pink
+    }
+
+    private var settleDestination: String {
+        switch payout.mode {
+        case .friends:
+            if payout.friends.isEmpty { return "No friends in your group yet" }
+            let names = payout.friends.prefix(3).map(\.name).joined(separator: ", ")
+            let rest = payout.friends.count > 3 ? " +\(payout.friends.count - 3) more" : ""
+            return names + rest
+        case .charity:
+            return CharityCatalog.find(id: payout.selectedCharityId)?.name ?? "No charity selected"
+        }
+    }
+
+    private var settleButtonTitle: String {
+        switch payout.mode {
+        case .friends: "Pay friends now"
+        case .charity: "Donate now"
+        }
+    }
+
+    private var perFriendCents: Int {
+        guard !payout.friends.isEmpty else { return 0 }
+        return ledgerTotal / payout.friends.count
+    }
+
+    private var canSettle: Bool {
+        switch payout.mode {
+        case .friends: !payout.friends.isEmpty
+        case .charity: payout.selectedCharityId != nil
+        }
+    }
+
+    private var settleConfirmationMessage: String {
+        switch payout.mode {
+        case .friends:
+            let count = payout.friends.count
+            return "Sending \(formatCents(perFriendCents)) to each of \(count) friend\(count == 1 ? "" : "s")."
+        case .charity:
+            let name = CharityCatalog.find(id: payout.selectedCharityId)?.name ?? "the selected cause"
+            return "Donating \(formatCents(ledgerTotal)) to \(name)."
+        }
+    }
+
+    private var settleSuccessTitle: String {
+        payout.mode == .friends ? "Paid" : "Donated"
+    }
+
+    private var settleSuccessMessage: String {
+        switch payout.mode {
+        case .friends:
+            return "Sent \(formatCents(lastSettledCents)) to your accountability group."
+        case .charity:
+            let name = CharityCatalog.find(id: payout.selectedCharityId)?.name ?? "your cause"
+            return "\(formatCents(lastSettledCents)) is on its way to \(name). Thanks for giving back."
+        }
+    }
+
+    private func settlePayment() {
+        lastSettledCents = ledgerTotal
+        withAnimation(.snappy) {
+            OverageLedger.clear()
+            ledgerTotal = 0
+        }
+        showingSettleSuccess = true
+    }
+
+    // MARK: - Settings
+
+    private var settingsCard: some View {
+        VStack(spacing: 0) {
+            settingsRow(
+                icon: "hourglass",
+                tint: .blue,
+                title: "Daily limit",
+                value: "\(settings.dailyMinutes) min"
+            ) {
+                Stepper("", value: $settings.dailyMinutes, in: 1...600, step: 5)
+                    .labelsHidden()
+            }
+            Divider().padding(.leading, 60)
+            settingsRow(
+                icon: "dollarsign.circle.fill",
+                tint: .green,
+                title: "Rate over limit",
+                value: "\(formatCents(settings.centsPerMinuteOver)) / min"
+            ) {
+                Stepper("", value: $settings.centsPerMinuteOver, in: 1...500, step: 5)
+                    .labelsHidden()
+            }
+        }
+        .padding(12)
         .cardBackground()
     }
+
+    private func settingsRow<Control: View>(
+        icon: String,
+        tint: Color,
+        title: String,
+        value: String,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(tint.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.medium))
+                Text(value).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+            Spacer()
+            control()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Apps
 
     private var appsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Watched apps", systemImage: "app.badge")
-                    .font(.headline)
+                Text("Watched apps")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 Spacer()
-                Button { showingAppPicker = true } label: {
-                    Text(settings.watchedAppIds.isEmpty ? "Pick" : "Edit")
-                        .font(.subheadline.weight(.medium))
+                Button {
+                    showingAppPicker = true
+                } label: {
+                    Text(settings.watchedAppIds.isEmpty ? "Add" : "Edit")
+                        .font(.subheadline.weight(.semibold))
                 }
             }
 
             if watchedApps.isEmpty {
-                HStack {
-                    Image(systemName: "app.dashed")
-                        .foregroundStyle(.tertiary)
-                    Text("Pick at least one app to start")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                Button { showingAppPicker = true } label: {
+                    HStack {
+                        Image(systemName: "plus.app")
+                            .font(.title3)
+                            .foregroundStyle(.indigo)
+                        Text("Choose apps to watch")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
             } else {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 72, maximum: 88))],
-                    spacing: 14
-                ) {
-                    ForEach(watchedApps) { app in
-                        VStack(spacing: 6) {
-                            Image(systemName: app.symbol)
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 52, height: 52)
-                                .background(app.tint.color.gradient)
-                                .clipShape(RoundedRectangle(cornerRadius: 13))
-                            Text(app.name)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(watchedApps) { app in
+                            VStack(spacing: 6) {
+                                AppIconView(app: app, size: 54)
+                                Text(app.name)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 64)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
         }
-        .padding()
+        .padding(16)
         .cardBackground()
     }
 
-    private var payoutSummary: some View {
+    // MARK: - Payout
+
+    private var payoutRow: some View {
         HStack(spacing: 12) {
             Image(systemName: payout.mode == .charity ? "heart.fill" : "person.2.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: 34, height: 34)
                 .background((payout.mode == .charity ? Color.pink : Color.indigo).gradient)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 2) {
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 1) {
                 Text(payoutTitle)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
                 Text(payoutSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(.tertiary)
         }
-        .padding()
+        .padding(14)
         .cardBackground()
     }
 
@@ -276,22 +506,51 @@ struct HomeView: View {
 
     private var payoutSubtitle: String {
         switch payout.mode {
-        case .friends: "Friends mode"
-        case .charity: "Charity mode"
+        case .friends: "Friends mode · tap Accountability"
+        case .charity: "Charity mode · tap Accountability"
         }
     }
 
+    // MARK: - Footer
+
     private var clearLedgerButton: some View {
         Button(role: .destructive) {
-            OverageLedger.clear()
-            ledgerTotal = 0
+            withAnimation(.snappy) {
+                OverageLedger.clear()
+                ledgerTotal = 0
+            }
         } label: {
             Label("Clear ledger", systemImage: "trash")
-                .frame(maxWidth: .infinity)
+                .font(.subheadline.weight(.medium))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
+        .foregroundStyle(.red)
         .padding(.top, 4)
     }
+
+    // MARK: - App picker sheet
+
+    private var appPickerSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    AppSelectionView(watchedAppIds: $settings.watchedAppIds)
+                } footer: {
+                    Text("Only these apps count toward your daily limit.")
+                }
+            }
+            .navigationTitle("Watched apps")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showingAppPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    // MARK: - Helpers
 
     private var watchedApps: [MockApp] {
         MockAppCatalog.all.filter { settings.watchedAppIds.contains($0.id) }
