@@ -78,7 +78,7 @@ struct HomeView: View {
     private var simulationCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Simulation", systemImage: "timer")
+                Label("Tracking", systemImage: "timer")
                     .font(.headline)
                 Spacer()
                 if session?.isRunning == true {
@@ -135,7 +135,7 @@ struct HomeView: View {
                 session.stop()
                 self.session = nil
             } label: {
-                Label("Stop simulation", systemImage: "stop.fill")
+                Label("Stop tracking", systemImage: "stop.fill")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
             }
@@ -153,7 +153,7 @@ struct HomeView: View {
             Button {
                 startSession()
             } label: {
-                Label("Start simulation", systemImage: "play.fill")
+                Label("Start tracking", systemImage: "play.fill")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
             }
