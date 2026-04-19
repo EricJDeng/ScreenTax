@@ -59,6 +59,10 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
         .background(heroBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(alignment: .bottomTrailing) {
+            trackingToggleButton
+                .padding(10)
+        }
         .shadow(
             color: session?.isRunning == true
                 ? Color.indigo.opacity(0.22)
@@ -67,6 +71,31 @@ struct HomeView: View {
         )
         .animation(.snappy, value: session?.isRunning)
         .animation(.snappy, value: session?.minutesOver ?? 0 > 0)
+    }
+
+    private var trackingToggleButton: some View {
+        let isRunning = session?.isRunning == true
+        let disabled = !isRunning && settings.watchedAppIds.isEmpty
+        return Button {
+            if isRunning {
+                session?.stop()
+                session = nil
+            } else {
+                startSession()
+            }
+        } label: {
+            Image(systemName: isRunning ? "pause.fill" : "play.fill")
+                .font(.system(size: 6, weight: .semibold))
+                .foregroundStyle(
+                    (isRunning ? Color.white : Color.primary)
+                        .opacity(disabled ? 0.05 : 0.12)
+                )
+                .frame(width: 15, height: 15)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .accessibilityLabel(isRunning ? "Pause tracking" : "Start tracking")
     }
 
     @ViewBuilder
@@ -104,20 +133,6 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
             }
-
-            Button {
-                startSession()
-            } label: {
-                Label("Start tracking", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(.indigo)
-            .disabled(settings.watchedAppIds.isEmpty)
-            .padding(.top, 6)
         }
     }
 
@@ -163,20 +178,6 @@ struct HomeView: View {
             }
             .frame(width: 220, height: 220)
             .padding(.vertical, 4)
-
-            Button {
-                session.stop()
-                self.session = nil
-            } label: {
-                Label("Stop tracking", systemImage: "stop.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(.white)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(.white.opacity(0.22))
         }
     }
 
